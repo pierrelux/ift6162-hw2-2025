@@ -21,8 +21,8 @@ The reactor has length $L = 10$ m. We discretize the spatial domain into $N_z = 
 | 0 | Kaolinite | Solid | Reactant clay mineral |
 | 1 | Quartz | Solid | Inert silica |
 | 2 | Metakaolin | Solid | Product of dehydroxylation |
-| 3 | N$_2$ | Gas | Inert carrier gas |
-| 4 | H$_2$O | Gas | Product of dehydroxylation |
+| 3 | $\text{N}_2$ | Gas | Inert carrier gas |
+| 4 | $\text{H}_2O$ | Gas | Product of dehydroxylation |
 
 At each spatial cell $j \in \{1, \ldots, N_z\}$, we track:
 
@@ -44,7 +44,7 @@ $$
 r(T, c_{\text{kao}}) = A \exp\left( -\frac{E_a}{RT} \right) c_{\text{kao}}^3
 $$
 
-where $A = 2.9 \times 10^{15}$ s$^{-1}$ is the pre-exponential factor, $E_a = 202$ kJ/mol is the activation energy, and $R = 8.314$ J/(mol·K) is the universal gas constant. The third-order dependence captures the cooperative nature of dehydroxylation across adjacent hydroxyl groups in the crystal lattice.
+where $A = 2.9 \times 10^{15}$ $s^{-1}$ is the pre-exponential factor, $E_a = 202$ kJ/mol is the activation energy, and $R = 8.314$ J/(mol·K) is the universal gas constant. The third-order dependence captures the cooperative nature of dehydroxylation across adjacent hydroxyl groups in the crystal lattice.
 
 ### Mass Balance
 
@@ -127,7 +127,7 @@ The predicted next state is then $\hat{x}_{k+1} = x_k + g_\theta(x_k, u_k)$. Thi
 
 ### Input Normalization
 
-The state vector contains quantities with different scales: concentrations range from 0.01 to 10 mol/m$^3$, while temperatures range from 600 to 1300 K. We normalize inputs by subtracting the empirical mean and dividing by the empirical standard deviation computed over the training data:
+The state vector contains quantities with different scales: concentrations range from 0.01 to 10 $\text{mol/m}^3$, while temperatures range from 600 to 1300 K. We normalize inputs by subtracting the empirical mean and dividing by the empirical standard deviation computed over the training data:
 
 $$
 \tilde{x} = \frac{x - \mu_x}{\sigma_x}, \qquad \tilde{u} = \frac{u - \mu_u}{\sigma_u}
