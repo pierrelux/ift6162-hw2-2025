@@ -57,14 +57,15 @@ class CalcinerEnv:
         power = self.model.heater_power(u)
         target = self.alpha_min[self.t]
         
-        # Reward - constraint satisfaction is primary
+        # Simple reward: minimize power, penalize violations
+        # Same structure as PPO (which works)
+        power_normalized = (power - 0.35) / 0.15  # Normalize to ~[-1, 1]
         margin = self.alpha - target
+        
         if margin >= 0:
-            # Meeting constraint: reward for efficiency
-            reward = 1.0 - power * 2.0  # Base reward + energy penalty
+            reward = -power_normalized + 0.1  # Energy cost + small bonus
         else:
-            # Violating constraint: heavy penalty
-            reward = -10.0 - 50.0 * (-margin)
+            reward = -power_normalized - 5.0 * (-margin) - 0.5  # + violation penalty
         
         self.t += 1
         done = self.t >= self.episode_length
@@ -246,7 +247,7 @@ class TD3:
 
 def train_td3(n_episodes=300, batch_size=128, start_steps=500, exploration_noise=30.0):
     env = CalcinerEnv()
-    agent = TD3(obs_dim=4, hidden=64, lr=3e-4)
+    agent = TD3(obs_dim=4, hidden=128, lr=1e-3)  # Bigger network, faster learning
     buffer = ReplayBuffer(capacity=50000)
     
     history = {'episode': [], 'return': [], 'power': [], 'violations': []}
@@ -455,7 +456,12 @@ def plot_training(history):
 
 
 if __name__ == "__main__":
-    agent, history = train_td3(n_episodes=300, batch_size=128, start_steps=800, 
-                                exploration_noise=30.0)
+    # Proper hyperparameters for TD3
+    agent, history = train_td3(
+        n_episodes=800,          # Even more training
+        batch_size=256,
+        start_steps=2000,
+        exploration_noise=40.0,
+    )
     plot_training(history)
     evaluate_and_plot(agent)

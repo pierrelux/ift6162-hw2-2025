@@ -78,13 +78,13 @@ def run_mpc_control(surrogate, simulator, n_steps=50, alpha_target=0.95):
     print(f"\nRunning MPC control for {n_steps} steps...", flush=True)
     print(f"  Target conversion: α ≥ {alpha_target:.0%}", flush=True)
     
-    # Create controller - more aggressive about constraints
+    # Create controller - balanced speed vs quality
     mppi = SurrogateMPPI(
         surrogate, 
-        horizon=15,  # Longer horizon for better planning
-        n_samples=128,  # More samples for better coverage
-        temperature=0.05,  # Lower temp = more greedy toward low cost
-        noise_sigma=np.array([50, 20])  # More exploration
+        horizon=12,  # Good horizon for planning
+        n_samples=96,  # Reasonable samples
+        temperature=0.05,  # Greedy toward low cost
+        noise_sigma=np.array([60, 25])  # Exploration
     )
     
     # Initial state (cold start)
@@ -139,8 +139,8 @@ def run_mpc_control(surrogate, simulator, n_steps=50, alpha_target=0.95):
         history['mpc_time'].append(mpc_time)
         history['states'].append(x.copy())
         
-        # Progress
-        if step % 10 == 0:
+        # Progress - more frequent updates
+        if step % 5 == 0:
             print(f"  Step {step:3d}: α={alpha:.2%}, T_out={T_s_out:.0f}K, "
                   f"T_g_in={T_g_in:.0f}K, MPC={mpc_time*1000:.0f}ms", flush=True)
         
@@ -348,7 +348,7 @@ def main():
     
     # Run MPC control
     alpha_target = 0.95
-    n_steps = 50
+    n_steps = 80  # Longer simulation to reach steady state
     
     mpc_hist = run_mpc_control(
         surrogate, simulator, 
