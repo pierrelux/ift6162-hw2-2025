@@ -22,10 +22,16 @@ from scipy.integrate import solve_ivp
 import matplotlib.pyplot as plt
 from pathlib import Path
 import time
+import sys
 from typing import Tuple, Optional, Dict, List
 
 # Import physics model
 from flash_calciner import SimplifiedFlashCalciner, N_SPECIES, L
+
+
+def print_progress(msg: str, flush: bool = True):
+    """Print with immediate flush for visibility."""
+    print(msg, flush=flush)
 
 # Device configuration
 DEVICE = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
@@ -271,11 +277,11 @@ def generate_training_data(simulator: CalcinerSimulator,
     all_next_states = []
     
     start_time = time.time()
+    last_print_time = start_time
     
     for traj_idx in range(n_trajectories):
-        if verbose and traj_idx % 10 == 0:
-            print(f"  Generating trajectory {traj_idx + 1}/{n_trajectories}...")
-            
+        traj_start = time.time()
+        
         # Random initial state
         x0 = simulator.sample_random_state()
         
@@ -298,6 +304,20 @@ def generate_training_data(simulator: CalcinerSimulator,
             all_states.append(x_traj[t])
             all_controls.append(u_seq[t])
             all_next_states.append(x_traj[t + 1])
+        
+        traj_time = time.time() - traj_start
+        elapsed = time.time() - start_time
+        
+        # Print progress every trajectory or every 2 seconds
+        if verbose and (time.time() - last_print_time > 2.0 or traj_idx == 0):
+            remaining = (elapsed / (traj_idx + 1)) * (n_trajectories - traj_idx - 1)
+            pct = 100 * (traj_idx + 1) / n_trajectories
+            bar_len = 30
+            filled = int(bar_len * (traj_idx + 1) / n_trajectories)
+            bar = '█' * filled + '░' * (bar_len - filled)
+            print(f"\r  [{bar}] {pct:5.1f}% | Traj {traj_idx+1}/{n_trajectories} | "
+                  f"Last: {traj_time:.2f}s | ETA: {remaining:.0f}s", end='', flush=True)
+            last_print_time = time.time()
     
     elapsed = time.time() - start_time
     
@@ -306,8 +326,9 @@ def generate_training_data(simulator: CalcinerSimulator,
     next_states = np.array(all_next_states)
     
     if verbose:
-        print(f"  Generated {len(states)} transitions in {elapsed:.1f}s")
-        print(f"  ({elapsed/len(states)*1000:.2f} ms per transition)")
+        print()  # New line after progress bar
+        print(f"  ✓ Generated {len(states)} transitions in {elapsed:.1f}s")
+        print(f"    ({elapsed/len(states)*1000:.2f} ms per transition)")
     
     return TransitionDataset(states, controls, next_states)
 
@@ -523,6 +544,9 @@ def train_surrogate(model: nn.Module,
     
     history = {'train_loss': [], 'val_loss': [], 'epoch_times': []}
     
+    total_start = time.time()
+    print(f"  Starting training for {n_epochs} epochs...", flush=True)
+    
     for epoch in range(n_epochs):
         epoch_start = time.time()
         
@@ -553,6 +577,7 @@ def train_surrogate(model: nn.Module,
         history['train_loss'].append(train_loss)
         
         # Validation
+        val_loss = None
         if val_loader is not None:
             model.eval()
             val_loss = 0.0
@@ -574,10 +599,19 @@ def train_surrogate(model: nn.Module,
         epoch_time = time.time() - epoch_start
         history['epoch_times'].append(epoch_time)
         
-        if (epoch + 1) % 10 == 0:
-            val_str = f", val={val_loss:.2e}" if val_loader else ""
-            print(f"  Epoch {epoch+1:3d}/{n_epochs}: train={train_loss:.2e}{val_str}, "
-                  f"time={epoch_time:.1f}s")
+        # Progress bar every epoch
+        elapsed = time.time() - total_start
+        remaining = (elapsed / (epoch + 1)) * (n_epochs - epoch - 1)
+        pct = 100 * (epoch + 1) / n_epochs
+        bar_len = 30
+        filled = int(bar_len * (epoch + 1) / n_epochs)
+        bar = '█' * filled + '░' * (bar_len - filled)
+        val_str = f" val={val_loss:.2e}" if val_loss else ""
+        print(f"\r  [{bar}] {pct:5.1f}% | Ep {epoch+1:3d}/{n_epochs} | "
+              f"loss={train_loss:.2e}{val_str} | ETA: {remaining:.0f}s", end='', flush=True)
+    
+    print()  # New line after progress bar
+    print(f"  ✓ Training complete in {time.time() - total_start:.1f}s", flush=True)
     
     return history
 
@@ -681,10 +715,148 @@ class SurrogateModel:
 # MPC with Surrogate
 # =============================================================================
 
+class SurrogateMPPI:
+    """
+    MPPI (Model Predictive Path Integral) controller using neural surrogate.
+    
+    Sampling-based MPC that's extremely fast with neural surrogates because:
+    1. No gradients needed - just forward passes
+    2. Highly parallelizable - batch all samples
+    3. Works well with neural network dynamics
+    """
+    
+    def __init__(self, surrogate: SurrogateModel,
+                 horizon: int = 10,
+                 n_samples: int = 256,
+                 temperature: float = 0.1,
+                 u_min: np.ndarray = np.array([900, 550]),
+                 u_max: np.ndarray = np.array([1350, 800]),
+                 noise_sigma: np.ndarray = np.array([50, 25])):
+        """
+        Parameters
+        ----------
+        surrogate : SurrogateModel
+            Trained neural surrogate
+        horizon : int
+            Prediction horizon
+        n_samples : int
+            Number of trajectory samples
+        temperature : float
+            MPPI temperature (lower = more greedy)
+        u_min, u_max : np.ndarray
+            Control bounds [T_g_in, T_s_in]
+        noise_sigma : np.ndarray
+            Exploration noise std for each control
+        """
+        self.surrogate = surrogate.eval()
+        self.horizon = horizon
+        self.n_samples = n_samples
+        self.temperature = temperature
+        
+        self.device = surrogate.device
+        self.u_min = torch.tensor(u_min, dtype=torch.float32, device=self.device)
+        self.u_max = torch.tensor(u_max, dtype=torch.float32, device=self.device)
+        self.noise_sigma = torch.tensor(noise_sigma, dtype=torch.float32, device=self.device)
+        
+        # Warm-start mean trajectory
+        self.u_mean = (self.u_min + self.u_max) / 2
+        self.u_mean = self.u_mean.unsqueeze(0).expand(horizon, -1).clone()
+        
+        # Cost weights
+        self.N_z = 20
+        self.n_species = 5
+    
+    def compute_costs(self, x_traj: torch.Tensor, u_seq: torch.Tensor,
+                     alpha_min: float = 0.95) -> torch.Tensor:
+        """
+        Compute costs for batch of trajectories.
+        
+        Parameters
+        ----------
+        x_traj : torch.Tensor, shape (n_samples, horizon+1, state_dim)
+        u_seq : torch.Tensor, shape (n_samples, horizon, control_dim)
+        
+        Returns
+        -------
+        costs : torch.Tensor, shape (n_samples,)
+        """
+        n_samples = x_traj.shape[0]
+        
+        # Energy cost (normalized)
+        T_g_in = u_seq[:, :, 0]
+        energy_cost = torch.mean((T_g_in - 900) / (1350 - 900), dim=1)
+        
+        # Conversion constraint
+        conc_dim = self.n_species * self.N_z
+        c_kaolinite = x_traj[:, 1:, :conc_dim].view(n_samples, self.horizon, self.n_species, self.N_z)
+        c_kao_out = c_kaolinite[:, :, 0, -1]
+        c_kao_in = 0.15
+        alpha = 1.0 - c_kao_out / (c_kao_in + 1e-6)
+        alpha = torch.clamp(alpha, 0, 1)
+        
+        violation = torch.relu(alpha_min - alpha)
+        constraint_cost = 5000.0 * torch.mean(violation ** 2, dim=1)
+        
+        # Terminal temperature
+        T_s = x_traj[:, -1, conc_dim:conc_dim + self.N_z]
+        T_s_out = T_s[:, -1]
+        temp_cost = 0.01 * ((T_s_out - 1066) / 100) ** 2
+        
+        return energy_cost + constraint_cost + temp_cost
+    
+    @torch.no_grad()
+    def solve(self, x0: np.ndarray, alpha_min: float = 0.95) -> Tuple[np.ndarray, float]:
+        """
+        Solve MPC using MPPI.
+        
+        Very fast because:
+        - No gradients (torch.no_grad)
+        - All samples processed in parallel batch
+        """
+        # Current state (replicate for all samples)
+        x0_t = torch.tensor(x0, dtype=torch.float32, device=self.device)
+        x0_batch = x0_t.unsqueeze(0).expand(self.n_samples, -1)  # (n_samples, state_dim)
+        
+        # Sample control perturbations
+        noise = torch.randn(self.n_samples, self.horizon, 2, device=self.device)
+        noise = noise * self.noise_sigma
+        
+        # Perturbed control sequences
+        u_seq = self.u_mean.unsqueeze(0) + noise  # (n_samples, horizon, 2)
+        u_seq = torch.clamp(u_seq, self.u_min, self.u_max)
+        
+        # Parallel rollout for ALL samples at once
+        x_traj = self.surrogate.rollout(x0_batch, u_seq)  # (n_samples, horizon+1, state_dim)
+        
+        # Compute costs
+        costs = self.compute_costs(x_traj, u_seq, alpha_min)
+        
+        # MPPI weighting
+        costs_shifted = costs - costs.min()
+        weights = torch.exp(-costs_shifted / self.temperature)
+        weights = weights / weights.sum()
+        
+        # Weighted average of control sequences
+        u_opt_seq = torch.sum(weights.view(-1, 1, 1) * u_seq, dim=0)  # (horizon, 2)
+        
+        # Update mean for warm-start
+        self.u_mean = u_opt_seq.clone()
+        
+        # Shift for next step
+        self.u_mean[:-1] = self.u_mean[1:].clone()
+        self.u_mean[-1] = (self.u_min + self.u_max) / 2
+        
+        # Return first control
+        u_opt = u_opt_seq[0].cpu().numpy()
+        best_cost = (weights * costs).sum().item()
+        
+        return u_opt, best_cost
+
+
 class SurrogateMPC:
     """
-    Economic MPC using neural surrogate for fast predictions.
-    Uses gradient-based optimization through the differentiable surrogate.
+    Gradient-based MPC using neural surrogate.
+    Slower than MPPI but can be more precise.
     """
     
     def __init__(self, surrogate: SurrogateModel, 
@@ -693,59 +865,29 @@ class SurrogateMPC:
                  u_max: np.ndarray = np.array([1350, 800]),
                  n_iter: int = 50,
                  lr: float = 5.0):
-        """
-        Parameters
-        ----------
-        surrogate : SurrogateModel
-            Trained neural surrogate
-        horizon : int
-            Prediction horizon
-        u_min, u_max : np.ndarray
-            Control bounds [T_g_in, T_s_in]
-        n_iter : int
-            Number of optimization iterations
-        lr : float
-            Learning rate for control optimization
-        """
         self.surrogate = surrogate.eval()
         self.horizon = horizon
         self.u_min = torch.tensor(u_min, dtype=torch.float32, device=surrogate.device)
         self.u_max = torch.tensor(u_max, dtype=torch.float32, device=surrogate.device)
         self.n_iter = n_iter
         self.lr = lr
-        
-        # Cost weights
         self.N_z = 20
         self.n_species = 5
         
     def compute_cost(self, x_traj: torch.Tensor, u_seq: torch.Tensor,
                     alpha_min: float = 0.95) -> torch.Tensor:
-        """
-        Compute MPC cost over trajectory.
-        
-        Cost = energy + constraint_penalty
-        
-        Energy: proportional to inlet gas temperature
-        Constraint: conversion α ≥ α_min
-        """
-        # Energy cost (normalized by reference)
-        T_g_in = u_seq[:, :, 0]  # (batch, T)
+        T_g_in = u_seq[:, :, 0]
         energy_cost = torch.mean((T_g_in - 900) / (1350 - 900), dim=1)
         
-        # Conversion constraint
-        # Conversion α = 1 - c_kaolinite_out / c_kaolinite_in
         conc_dim = self.n_species * self.N_z
         c_kaolinite = x_traj[:, 1:, :conc_dim].view(-1, self.horizon, self.n_species, self.N_z)
-        c_kao_out = c_kaolinite[:, :, 0, -1]  # Outlet kaolinite concentration
-        c_kao_in = 0.15  # Reference inlet
-        alpha = 1.0 - c_kao_out / (c_kao_in + 1e-6)
+        c_kao_out = c_kaolinite[:, :, 0, -1]
+        alpha = 1.0 - c_kao_out / (0.15 + 1e-6)
         alpha = torch.clamp(alpha, 0, 1)
         
-        # Soft constraint penalty
         violation = torch.relu(alpha_min - alpha)
-        constraint_cost = 1000.0 * torch.mean(violation ** 2, dim=1)
+        constraint_cost = 5000.0 * torch.mean(violation ** 2, dim=1)
         
-        # Terminal temperature target (want solid temp around 1066 K)
         T_s = x_traj[:, -1, conc_dim:conc_dim + self.N_z]
         T_s_out = T_s[:, -1]
         temp_cost = 0.01 * ((T_s_out - 1066) / 100) ** 2
@@ -753,64 +895,32 @@ class SurrogateMPC:
         return energy_cost + constraint_cost + temp_cost
     
     def solve(self, x0: np.ndarray, alpha_min: float = 0.95) -> Tuple[np.ndarray, float]:
-        """
-        Solve MPC problem.
-        
-        Parameters
-        ----------
-        x0 : np.ndarray, shape (state_dim,)
-            Current state
-        alpha_min : float
-            Minimum conversion requirement
-            
-        Returns
-        -------
-        u_opt : np.ndarray, shape (control_dim,)
-            Optimal control for current step
-        cost : float
-            Optimal cost value
-        """
         device = self.surrogate.device
-        
-        # Convert to tensor
         x0_t = torch.tensor(x0, dtype=torch.float32, device=device).unsqueeze(0)
         
-        # Initialize control sequence (warm start with previous solution or midpoint)
         u_init = (self.u_min + self.u_max) / 2
         u_seq = u_init.unsqueeze(0).unsqueeze(0).expand(1, self.horizon, -1).clone()
         u_seq = u_seq.requires_grad_(True)
         
-        # Optimization
         optimizer = torch.optim.Adam([u_seq], lr=self.lr)
-        
-        best_u = None
-        best_cost = float('inf')
+        best_u, best_cost = None, float('inf')
         
         for i in range(self.n_iter):
             optimizer.zero_grad()
-            
-            # Project to feasible region
             with torch.no_grad():
                 u_seq.data = torch.clamp(u_seq.data, self.u_min, self.u_max)
             
-            # Rollout
             x_traj = self.surrogate.rollout(x0_t, u_seq)
-            
-            # Cost
             cost = self.compute_cost(x_traj, u_seq, alpha_min).mean()
             
-            # Track best
             if cost.item() < best_cost:
                 best_cost = cost.item()
                 best_u = u_seq.detach().clone()
             
-            # Backward
             cost.backward()
             optimizer.step()
         
-        # Return first control
-        u_opt = best_u[0, 0].cpu().numpy()
-        return u_opt, best_cost
+        return best_u[0, 0].cpu().numpy(), best_cost
 
 
 # =============================================================================
@@ -851,6 +961,13 @@ def compare_surrogate_physics(surrogate: SurrogateModel,
         # Relative error
         rel_error = np.mean(np.abs(x_surrogate - x_physics) / (np.abs(x_physics) + 1e-6))
         errors.append(rel_error)
+        
+        # Progress
+        print(f"\r    Test {i+1}/{n_test}: err={rel_error*100:.1f}%, "
+              f"physics={physics_times[-1]*1000:.0f}ms, surr={surrogate_times[-1]*1000:.1f}ms", 
+              end='', flush=True)
+    
+    print()  # New line
     
     return {
         'mean_rel_error': np.mean(errors),
@@ -866,30 +983,37 @@ def compare_surrogate_physics(surrogate: SurrogateModel,
 # =============================================================================
 
 def main():
-    print("=" * 70)
-    print("Neural Surrogate for Flash Calciner")
-    print("=" * 70)
+    print("=" * 70, flush=True)
+    print("Neural Surrogate for Flash Calciner", flush=True)
+    print("=" * 70, flush=True)
     
     # Create simulator
     N_z = 20
     dt = 0.1  # 100ms discrete time step
     simulator = CalcinerSimulator(N_z=N_z, dt=dt)
-    print(f"\nState dimension: {simulator.state_dim}")
-    print(f"Control dimension: {simulator.control_dim}")
-    print(f"Discrete time step: {dt}s")
+    print(f"\n✓ Simulator created", flush=True)
+    print(f"  State dimension: {simulator.state_dim}", flush=True)
+    print(f"  Control dimension: {simulator.control_dim}", flush=True)
+    print(f"  Discrete time step: {dt}s", flush=True)
     
-    # Generate training data
-    print("\n" + "-" * 50)
-    print("Generating training data...")
-    print("-" * 50)
+    # Generate training data (reduced for faster iteration)
+    print("\n" + "-" * 50, flush=True)
+    print("Step 1: Generating training data...", flush=True)
+    print("-" * 50, flush=True)
+    
+    # Use fewer trajectories for faster debugging - increase for production
+    n_traj = 30  # Reduced from 100
+    traj_len = 30  # Reduced from 50
+    print(f"  Config: {n_traj} trajectories × {traj_len} steps = {n_traj * traj_len} transitions", flush=True)
     
     train_data = generate_training_data(
         simulator, 
-        n_trajectories=100, 
-        trajectory_length=50
+        n_trajectories=n_traj, 
+        trajectory_length=traj_len
     )
     
     # Split into train/val
+    print("\n  Splitting into train/val...", flush=True)
     n_total = len(train_data)
     n_val = n_total // 5
     indices = np.random.permutation(n_total)
@@ -900,80 +1024,118 @@ def main():
     train_loader = DataLoader(train_dataset, batch_size=256, shuffle=True)
     val_loader = DataLoader(val_dataset, batch_size=256)
     
-    print(f"Training samples: {len(train_dataset)}")
-    print(f"Validation samples: {len(val_dataset)}")
+    print(f"  Training samples: {len(train_dataset)}", flush=True)
+    print(f"  Validation samples: {len(val_dataset)}", flush=True)
     
     # Create model
-    print("\n" + "-" * 50)
-    print("Training neural surrogate...")
-    print("-" * 50)
+    print("\n" + "-" * 50, flush=True)
+    print("Step 2: Training neural surrogate...", flush=True)
+    print("-" * 50, flush=True)
     
     # Try spatially-aware architecture
     model = SpatiallyAwareDynamics(N_z=N_z)
-    print(f"Model: {model.__class__.__name__}")
-    print(f"Parameters: {sum(p.numel() for p in model.parameters()):,}")
+    print(f"  Model: {model.__class__.__name__}", flush=True)
+    print(f"  Parameters: {sum(p.numel() for p in model.parameters()):,}", flush=True)
+    print(f"  Device: {DEVICE}", flush=True)
     
-    # Train
+    # Train (reduced epochs for faster iteration)
+    n_epochs = 50  # Reduced from 100
     history = train_surrogate(
         model, 
         train_loader, 
         val_loader,
-        n_epochs=100,
+        n_epochs=n_epochs,
         lr=1e-3
     )
     
     # Create surrogate wrapper
+    print("\n  Creating surrogate wrapper...", flush=True)
     norm_params = train_data.get_normalization_params()
     surrogate = SurrogateModel(model, norm_params)
     
     # Evaluate
-    print("\n" + "-" * 50)
-    print("Evaluating surrogate...")
-    print("-" * 50)
+    print("\n" + "-" * 50, flush=True)
+    print("Step 3: Evaluating surrogate vs physics...", flush=True)
+    print("-" * 50, flush=True)
     
-    metrics = compare_surrogate_physics(surrogate, simulator, n_test=20, horizon=20)
-    print(f"Mean relative error: {metrics['mean_rel_error']*100:.2f}%")
-    print(f"Physics simulation: {metrics['physics_time_ms']:.1f} ms/rollout")
-    print(f"Surrogate prediction: {metrics['surrogate_time_ms']:.2f} ms/rollout")
-    print(f"Speedup: {metrics['speedup']:.0f}x")
+    n_test = 10  # Reduced for speed
+    print(f"  Running {n_test} comparison rollouts...", flush=True)
+    metrics = compare_surrogate_physics(surrogate, simulator, n_test=n_test, horizon=20)
+    print(f"  ✓ Mean relative error: {metrics['mean_rel_error']*100:.2f}%", flush=True)
+    print(f"  ✓ Physics simulation: {metrics['physics_time_ms']:.1f} ms/rollout", flush=True)
+    print(f"  ✓ Surrogate prediction: {metrics['surrogate_time_ms']:.2f} ms/rollout", flush=True)
+    print(f"  ✓ Speedup: {metrics['speedup']:.0f}x", flush=True)
     
-    # Test MPC
-    print("\n" + "-" * 50)
-    print("Testing MPC with surrogate...")
-    print("-" * 50)
+    # Test MPC - compare MPPI vs gradient-based
+    print("\n" + "-" * 50, flush=True)
+    print("Step 4: Testing MPC with surrogate...", flush=True)
+    print("-" * 50, flush=True)
     
-    mpc = SurrogateMPC(surrogate, horizon=10)
+    # Test fast MPPI first
+    print("\n  Testing MPPI (sampling-based, fast):", flush=True)
+    mppi = SurrogateMPPI(surrogate, horizon=10, n_samples=64)  # Reduced for CPU
     
-    # Run MPC for a few steps
     x = simulator.sample_random_state()
-    mpc_times = []
+    mppi_times = []
     
     for step in range(5):
         t0 = time.time()
-        u_opt, cost = mpc.solve(x, alpha_min=0.95)
-        mpc_time = time.time() - t0
-        mpc_times.append(mpc_time)
+        u_opt, cost = mppi.solve(x, alpha_min=0.95)
+        solve_time = time.time() - t0
+        mppi_times.append(solve_time)
         
-        print(f"Step {step+1}: u=[{u_opt[0]:.0f}, {u_opt[1]:.0f}] K, "
-              f"cost={cost:.3f}, time={mpc_time*1000:.0f}ms")
-        
-        # Apply control
+        print(f"    Step {step+1}: u=[{u_opt[0]:.0f}, {u_opt[1]:.0f}] K, "
+              f"cost={cost:.3f}, time={solve_time*1000:.1f}ms", flush=True)
         x = simulator.step(x, u_opt)
     
-    print(f"\nAverage MPC solve time: {np.mean(mpc_times)*1000:.0f}ms")
+    print(f"  ✓ MPPI avg solve time: {np.mean(mppi_times)*1000:.1f}ms", flush=True)
+    
+    # Compare with gradient-based MPC
+    print("\n  Testing Gradient MPC (more precise, for comparison):", flush=True)
+    mpc = SurrogateMPC(surrogate, horizon=10, n_iter=20)  # Reduced iterations
+    
+    x = simulator.sample_random_state()
+    mpc_times = []
+    
+    for step in range(3):  # Fewer steps since it's slower
+        t0 = time.time()
+        u_opt, cost = mpc.solve(x, alpha_min=0.95)
+        solve_time = time.time() - t0
+        mpc_times.append(solve_time)
+        
+        print(f"    Step {step+1}: u=[{u_opt[0]:.0f}, {u_opt[1]:.0f}] K, "
+              f"cost={cost:.3f}, time={solve_time*1000:.0f}ms", flush=True)
+        x = simulator.step(x, u_opt)
+    
+    print(f"  ✓ Grad MPC avg solve time: {np.mean(mpc_times)*1000:.0f}ms", flush=True)
+    
+    # Summary
+    speedup = np.mean(mpc_times) / np.mean(mppi_times)
+    if speedup > 1:
+        print(f"\n  Summary: MPPI is {speedup:.1f}x faster than Grad MPC!", flush=True)
+    else:
+        print(f"\n  Summary: Grad MPC is {1/speedup:.1f}x faster (try GPU for MPPI speedup)", flush=True)
     
     # Save model
+    print("\n" + "-" * 50, flush=True)
+    print("Step 5: Saving results...", flush=True)
+    print("-" * 50, flush=True)
+    
     save_path = Path("surrogate_model.pt")
+    # Convert numpy arrays to lists for safe serialization (PyTorch 2.6+)
+    safe_norm_params = {k: v.tolist() if isinstance(v, np.ndarray) else v 
+                        for k, v in norm_params.items()}
     torch.save({
         'model_state_dict': model.state_dict(),
-        'norm_params': norm_params,
+        'norm_params': safe_norm_params,
         'model_class': model.__class__.__name__,
         'N_z': N_z,
         'dt': dt
     }, save_path)
-    print(f"\nSaved model to {save_path}")
+    print(f"  ✓ Saved model to {save_path}", flush=True)
     
     # Plot training curve
+    print("  Generating training curve plot...", flush=True)
     fig, ax = plt.subplots(figsize=(8, 5))
     ax.semilogy(history['train_loss'], label='Train')
     ax.semilogy(history['val_loss'], label='Validation')
@@ -983,10 +1145,14 @@ def main():
     ax.legend()
     ax.grid(True, alpha=0.3)
     plt.savefig('surrogate_training.png', dpi=150, bbox_inches='tight')
-    print("Saved: surrogate_training.png")
+    print("  ✓ Saved: surrogate_training.png", flush=True)
     plt.close()
     
-    return surrogate, simulator, mpc
+    print("\n" + "=" * 70, flush=True)
+    print("✓ All done!", flush=True)
+    print("=" * 70, flush=True)
+    
+    return surrogate, simulator, mppi
 
 
 if __name__ == "__main__":
