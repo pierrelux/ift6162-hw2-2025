@@ -8,6 +8,7 @@ This project implements:
 1. **Physics-based PDE model** of a flash clay calciner (140-dimensional state)
 2. **Neural surrogate** that learns discrete-time dynamics (61× faster than physics)
 3. **MPPI controller** for energy-optimal control with conversion constraints
+4. **RL baselines** (TD3, PPO) for comparison
 
 ## Key Results
 
@@ -18,31 +19,29 @@ This project implements:
 | Conversion target | ✓ Achieved (96.8% vs 95% target) |
 | MPC solve time | 1.5s/step (CPU) |
 
-![MPC Control Results](figures/mpc_control_results.png)
-
 ## Project Structure
 
 ```
-├── src/                          # Source code
-│   ├── flash_calciner.py         # Physics-based PDE/ODE model
-│   ├── surrogate_flash_calciner.py  # Neural surrogate + MPPI/MPC
-│   └── run_surrogate_mpc.py      # Closed-loop control evaluation
+├── calciner/                      # Main package
+│   ├── __init__.py
+│   ├── physics.py                 # PDE-based flash calciner model
+│   ├── surrogate.py               # Neural surrogate + training
+│   ├── mpc.py                     # MPC controllers (MPPI, gradient, classical)
+│   ├── baselines.py               # Env for RL, constant-temp baseline
+│   └── rl/                        # RL algorithms
+│       ├── __init__.py
+│       ├── td3.py                 # TD3 (Twin Delayed DDPG)
+│       └── ppo.py                 # PPO (Proximal Policy Optimization)
 │
-├── models/                       # Trained model weights
+├── scripts/                       # Entry point scripts
+│   ├── train.py                   # Train neural surrogate
+│   ├── evaluate_mpc.py            # Run MPC evaluation
+│   └── evaluate_rl.py             # Train and evaluate RL baselines
+│
+├── models/                        # Trained model weights
 │   └── surrogate_model.pt
 │
-├── figures/                      # Output figures
-│   ├── mpc_control_results.png
-│   ├── mpc_state_profiles.png
-│   └── surrogate_training.png
-│
-├── baselines/                    # RL baseline experiments
-│   ├── td3_flash_calciner.py
-│   ├── ppo_flash_calciner.py
-│   ├── rl_flash_calciner.py
-│   └── figures/
-│
-├── archive/                      # Old experiments
+├── figures/                       # Output figures
 │
 ├── requirements.txt
 └── README.md
@@ -54,11 +53,14 @@ This project implements:
 # Install dependencies
 pip install -r requirements.txt
 
-# Train surrogate (generates ~900 transitions, trains neural net)
-python src/surrogate_flash_calciner.py
+# Train surrogate model
+python scripts/train.py
 
-# Run closed-loop MPC control
-python src/run_surrogate_mpc.py
+# Evaluate MPC controller
+python scripts/evaluate_mpc.py
+
+# Train and evaluate RL baselines
+python scripts/evaluate_rl.py
 ```
 
 ## Method
@@ -83,11 +85,11 @@ Model Predictive Path Integral control:
 
 **Cost function**: Energy + soft conversion constraint + terminal temperature
 
-### 3. Closed-Loop Evaluation
+### 3. RL Baselines
 
-- MPC plans with surrogate, executes on physics simulator
-- 80 steps (8 seconds simulated time)
-- Compares against constant-temperature baseline
+For comparison, we also implement:
+- **TD3**: Off-policy actor-critic with twin critics
+- **PPO**: On-policy with clipped objective
 
 ## Physics Model
 
