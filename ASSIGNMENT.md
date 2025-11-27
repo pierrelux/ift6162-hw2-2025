@@ -1,5 +1,7 @@
 # Assignment: Deep RL for Flash Calciner Control
 
+**Due: December 10, 2025**
+
 Industrial reactors are expensive to run. A flash calciner heats clay at 900-1300 K to produce metakaolin (used in high-performance concrete). Your job: learn a control policy that achieves target conversion $\alpha \geq \alpha_{min}$ while minimizing energy.
 
 This is a constrained control problem with continuous actions. You'll implement three RL algorithms on a simplified 3D problem, then scale your best approach to the full 140D PDE-based system using a neural surrogate.
@@ -10,6 +12,10 @@ This is a constrained control problem with continuous actions. You'll implement 
 | **2** | 140D (PDE surrogate) | Scale up your best algorithm | 50 |
 
 **Setup**: Run `python scripts/demo.py` to test environments. See `docs/model.md` for physics background.
+
+## Logistics
+
+You may work in teams of up to 3 people. All team members must understand the solution and code—we may conduct individual interview checkups where you'll be asked to explain your implementation choices, algorithm details, and results. If you worked in a team and cannot explain your own code, you will receive a reduced grade.
 
 ## Part 1: Simplified Problem (50 points)
 
