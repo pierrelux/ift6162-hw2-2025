@@ -37,13 +37,19 @@ $$\alpha_{k+1} = e^{-\Delta t/\tau} \alpha_k + (1 - e^{-\Delta t/\tau}) \, \alph
 where:
 - $\tau = 2$ s is the thermal time constant (how fast the reactor responds to temperature changes)
 - $\Delta t = 0.5$ s is the control period
-- $\alpha_{ss}(u)$ is the steady-state conversion at gas inlet temperature $u$
+- $\alpha_{ss}(u)$ is the **steady-state conversion**: the equilibrium $\alpha$ would reach if gas inlet temperature were held constant at $u$ indefinitely
+
+In other words, $\alpha_{ss}(u) = \lim_{t \to \infty} \alpha(t)$ when applying constant control $u$. The discrete dynamics exponentially relax toward this equilibrium with rate $1/\tau$.
 
 The steady-state conversion follows a **sigmoidal Arrhenius-like relationship**:
 
 $$\alpha_{ss}(T) = \frac{0.999}{1 + \exp(-0.025 \cdot (T - 1000))}$$
 
-This captures the physics: reaction rate increases exponentially with temperature (Arrhenius), but conversion saturates near 100%. At $T = 900$ K, $\alpha_{ss} \approx 50\%$; at $T = 1261$ K, $\alpha_{ss} \approx 99.8\%$.
+This captures two key physics phenomena:
+1. **Arrhenius kinetics**: Reaction rate (and thus conversion) increases exponentially with temperature
+2. **Saturation**: Conversion cannot exceed 100%, so it approaches an asymptote
+
+Numerically: $\alpha_{ss}(900\text{K}) \approx 50\%$, $\alpha_{ss}(1000\text{K}) \approx 73\%$, $\alpha_{ss}(1261\text{K}) \approx 99.8\%$. The inflection point at $T = 1000$ K corresponds to the temperature where the reaction becomes kinetically favorable.
 
 #### Why This Simplification?
 
