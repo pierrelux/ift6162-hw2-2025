@@ -178,12 +178,3 @@ A cosine annealing schedule decays the learning rate to zero over the training r
 On challenging evaluations with cold-start initial conditions and time-varying controls, the surrogate achieves approximately 19% mean relative error over 80-step rollouts. On near-steady-state conditions, error drops to under 1%. The error is concentrated at later timesteps and near the reactor outlet, where autoregressive prediction errors accumulate.
 
 This accuracy is sufficient for MPC: the controller replans at each time step, and the physics simulator provides ground-truth feedback for closed-loop correction. The trained surrogate evaluates a 20-step rollout in 0.4 ms, compared to 25 ms per step for the physics simulator, representing a 60× speedup.
-
-## Summary
-
-The flash calciner physics model captures the coupled mass and energy balances governing kaolinite dehydroxylation. The 140-dimensional state tracks concentrations of five species and temperatures of two phases across 20 spatial cells.
-
-A neural surrogate with spatially-aware convolutional architecture learns the discrete-time dynamics from 10,000 simulated transitions. Critical to accuracy is training data diversity: including cold-start conditions, partial reaction fronts, and near-steady-state profiles reduces rollout error from catastrophic (1468% MRE) to acceptable (19% MRE) on challenging transient scenarios.
-
-The surrogate achieves 60× speedup over the physics simulator, enabling real-time MPC that achieves 93% kaolinite conversion while saving 67% energy compared to constant-temperature operation.
-
