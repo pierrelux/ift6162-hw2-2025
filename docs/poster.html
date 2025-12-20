@@ -385,10 +385,10 @@
       <div class="brand-author">Pierre-Luc Bacon, PLuRL Group</div>
     </div>
     <div class="header-text">
-      <h1>Deep RL for Flash Clay Calciner Control</h1>
-      <p class="subtitle">Neural Surrogate Dynamics + Policy Gradient Methods for Energy-Optimal Metakaolin Production</p>
+      <h1>Deep RL & MPC for Flash Clay Calciner Control</h1>
+      <p class="subtitle">Neural Surrogate Dynamics + MPPI/PPO/TD3 for Energy-Optimal Metakaolin Production</p>
       <div class="key-finding">
-        <strong>60× speedup</strong> via neural surrogate | <strong>67% energy savings</strong> vs constant-temperature baseline | 140D state space controlled by PPO/TD3
+        <strong>60× speedup</strong> via neural surrogate | <strong>67% energy savings</strong> with MPPI | PPO/TD3 achieve ~55% savings on 140D state space
       </div>
     </div>
   </div>
@@ -656,43 +656,52 @@
 
 <div class="card span-2 accent-green">
   <div class="section-kicker">6 - Algorithms</div>
-  <h2>REINFORCE, PPO, TD3</h2>
+  <h2>MPPI + Deep RL Baselines</h2>
   
-  <p style="margin-bottom:8px;">Three policy gradient / actor-critic methods to explore the design space.</p>
+  <p style="margin-bottom:8px;">Sampling-based MPC (MPPI) as the primary method, with policy gradient baselines for comparison.</p>
   
-  <div style="display:grid; grid-template-columns: 1fr 1fr 1fr; gap:10px; margin:10px 0;">
+  <div style="display:grid; grid-template-columns: 1fr 1fr 1fr 1fr; gap:8px; margin:10px 0;">
+    <div style="background:var(--mila-orange-light); border-radius:8px; padding:10px; border:2px solid var(--mila-orange);">
+      <div style="font-weight:700; color:var(--mila-orange); font-size:0.9em; margin-bottom:6px;">MPPI ⭐</div>
+      <ul style="font-size:0.75em; margin:0; padding-left:14px;">
+        <li>Sampling-based MPC</li>
+        <li>256 parallel rollouts</li>
+        <li>Horizon = 10 steps</li>
+        <li><strong>Best performance</strong></li>
+      </ul>
+    </div>
     <div style="background:var(--mila-cyan-light); border-radius:8px; padding:10px; border:2px solid var(--mila-cyan);">
       <div style="font-weight:700; color:var(--mila-cyan); font-size:0.9em; margin-bottom:6px;">REINFORCE</div>
       <ul style="font-size:0.75em; margin:0; padding-left:14px;">
         <li>Vanilla policy gradient</li>
         <li>Monte Carlo returns</li>
-        <li>High variance baseline</li>
-        <li>Simple to implement</li>
+        <li>High variance</li>
+        <li>Simple baseline</li>
       </ul>
     </div>
     <div style="background:var(--mila-purple-light); border-radius:8px; padding:10px; border:2px solid var(--mila-purple);">
       <div style="font-weight:700; color:var(--mila-purple); font-size:0.9em; margin-bottom:6px;">PPO</div>
       <ul style="font-size:0.75em; margin:0; padding-left:14px;">
-        <li>Clipped surrogate objective</li>
-        <li>Trust region approximation</li>
-        <li>Stable on-policy learning</li>
-        <li>Good sample efficiency</li>
+        <li>Clipped objective</li>
+        <li>Trust region approx.</li>
+        <li>Stable on-policy</li>
+        <li>Good efficiency</li>
       </ul>
     </div>
     <div style="background:var(--mila-green-light); border-radius:8px; padding:10px; border:2px solid var(--mila-green);">
       <div style="font-weight:700; color:var(--mila-green); font-size:0.9em; margin-bottom:6px;">TD3</div>
       <ul style="font-size:0.75em; margin:0; padding-left:14px;">
-        <li>Twin critics (reduce overest.)</li>
-        <li>Delayed policy updates</li>
-        <li>Target policy smoothing</li>
-        <li>Off-policy, replay buffer</li>
+        <li>Twin critics</li>
+        <li>Delayed updates</li>
+        <li>Target smoothing</li>
+        <li>Off-policy</li>
       </ul>
     </div>
   </div>
   
   <div class="math-block" style="margin:8px 0; padding:8px;">
-    <div class="math-label">PPO Clipped Objective</div>
-    $$L^{CLIP}(\theta) = \mathbb{E}_t \left[ \min\left( r_t(\theta) \hat{A}_t, \text{clip}(r_t(\theta), 1-\epsilon, 1+\epsilon) \hat{A}_t \right) \right]$$
+    <div class="math-label">MPPI Control Law</div>
+    $$u^* = \sum_{k=1}^{K} w_k \cdot u_k, \quad w_k \propto \exp\left(-\frac{1}{\lambda} \text{cost}(\tau_k)\right)$$
   </div>
 </div>
 
