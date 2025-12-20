@@ -2,6 +2,10 @@
 
 Deep reinforcement learning for industrial process control.
 
+![Physics vs Surrogate Comparison](figures/surrogate_comparison.png)
+
+*Neural surrogate learns to approximate the 140D physics simulator with 19% mean relative error, enabling 60× faster rollouts for RL training.*
+
 ## Assignment
 
 See [ASSIGNMENT.md](ASSIGNMENT.md) for the full problem statement.

@@ -1,0 +1,809 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Flash Clay Calciner - Deep RL Control</title>
+<link href="https://fonts.googleapis.com/css2?family=Work+Sans:wght@300;400;500;600;700;800&amp;display=swap" rel="stylesheet"/>
+<link href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css" rel="stylesheet"/>
+<script defer="" src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
+<script defer="" src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js"></script>
+<style>
+    :root {
+      --mila-pink: #F694BB;
+      --mila-purple: #662E7D;
+      --mila-cyan: #59B9D2;
+      --mila-green: #3FAE82;
+      --mila-yellow: #F9B40D;
+      --mila-orange: #F05629;
+      --mila-red: #D41647;
+      --mila-dark: #363A44;
+      --mila-pink-light: #F2C1D3;
+      --mila-purple-light: #CEB3D3;
+      --mila-cyan-light: #A9DAE9;
+      --mila-green-light: #B9DBC1;
+      --mila-yellow-light: #F4DA92;
+      --mila-orange-light: #F3B692;
+      --mila-red-light: #EC9191;
+      --mila-silver: #A0AAB7;
+      --bg-teal: #ECF6F6;
+      --bg-cream: #F4F5F1;
+      --bg-gray: #DEDEDE;
+      --white: #ffffff;
+    }
+
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    body {
+      font-family: 'Work Sans', sans-serif;
+      background: var(--bg-cream);
+      color: var(--mila-dark);
+      line-height: 1.4;
+    }
+
+    .poster {
+      width: 100%;
+      max-width: 1800px;
+      margin: 0 auto;
+      padding: 16px;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+
+    /* Header */
+    header {
+      background: linear-gradient(135deg, var(--mila-orange) 0%, var(--mila-red) 100%);
+      color: var(--white);
+      border-radius: 16px;
+      padding: 22px 28px;
+      position: relative;
+      overflow: hidden;
+      box-shadow: 0 8px 26px rgba(54, 58, 68, 0.14);
+    }
+
+    header::after {
+      content: '';
+      position: absolute;
+      inset: 0;
+      pointer-events: none;
+      opacity: 0.18;
+      background:
+        linear-gradient(115deg, rgba(246,148,187,0.55) 0 18%, transparent 18% 100%),
+        linear-gradient(35deg, rgba(249,180,13,0.55) 0 16%, transparent 16% 100%),
+        linear-gradient(160deg, rgba(63,174,130,0.55) 0 14%, transparent 14% 100%),
+        linear-gradient(70deg, rgba(89,185,210,0.55) 0 12%, transparent 12% 100%);
+      mix-blend-mode: screen;
+    }
+
+    .header-content {
+      display: flex;
+      align-items: flex-start;
+      gap: 24px;
+      position: relative;
+      z-index: 1;
+    }
+
+    .brand-block { flex-shrink: 0; min-width: 170px; padding-top: 2px; }
+    .brand-wordmark { font-weight: 800; font-size: 1.55em; color: var(--white); line-height: 1; }
+    .brand-sub { margin-top: 6px; font-size: 0.78em; color: rgba(255,255,255,0.82); font-weight: 500; }
+    .brand-author { margin-top: 10px; font-size: 0.82em; color: var(--white); font-weight: 600; }
+
+    .header-text { flex: 1; }
+    h1 { font-size: 2.6em; font-weight: 700; color: var(--white); line-height: 1.1; margin-bottom: 6px; }
+    .subtitle { font-size: 0.95em; color: rgba(255,255,255,0.82); margin-bottom: 10px; }
+
+    .key-finding {
+      background: rgba(255,255,255,0.15);
+      border-left: 3px solid var(--mila-yellow);
+      padding: 10px 14px;
+      border-radius: 0 10px 10px 0;
+      font-size: 0.9em;
+      color: var(--white);
+      display: inline-block;
+    }
+    .key-finding strong { color: var(--mila-yellow-light); }
+
+    /* Grid */
+    .content-grid {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 12px;
+      flex: 1;
+    }
+
+    /* Cards */
+    .card {
+      background: var(--white);
+      border-radius: 14px;
+      padding: 14px 16px;
+      border: 1px solid rgba(160, 170, 183, 0.55);
+      box-shadow: 0 10px 18px rgba(54, 58, 68, 0.06);
+      font-size: 0.95em;
+    }
+
+    .card.span-2 { grid-column: span 2; }
+    .card.span-3 { grid-column: span 3; }
+    .card.span-4 { grid-column: span 4; }
+
+    .section-kicker {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      margin-bottom: 8px;
+      padding: 4px 10px;
+      border-radius: 999px;
+      font-size: 0.72em;
+      letter-spacing: 0.08em;
+      font-weight: 700;
+      text-transform: uppercase;
+      background: var(--bg-cream);
+    }
+    .section-kicker::before {
+      content: '';
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: var(--accent, var(--mila-purple));
+    }
+
+    .card h2 {
+      font-size: 1.6em;
+      font-weight: 800;
+      color: var(--mila-dark);
+      margin-bottom: 10px;
+      padding-bottom: 8px;
+      border-bottom: 2px solid var(--accent-light, var(--mila-cyan-light));
+    }
+
+    .card p { margin: 0 0 8px; line-height: 1.45; }
+    .card ul { list-style: none; padding-left: 0; margin: 8px 0; }
+    .card li { padding: 3px 0 3px 16px; position: relative; }
+    .card li::before {
+      content: '';
+      position: absolute;
+      left: 0;
+      top: 10px;
+      width: 6px;
+      height: 6px;
+      background: var(--accent, var(--mila-cyan));
+      border-radius: 50%;
+    }
+
+    .accent-purple { --accent: var(--mila-purple); --accent-light: var(--mila-purple-light); }
+    .accent-cyan { --accent: var(--mila-cyan); --accent-light: var(--mila-cyan-light); }
+    .accent-green { --accent: var(--mila-green); --accent-light: var(--mila-green-light); }
+    .accent-yellow { --accent: var(--mila-yellow); --accent-light: var(--mila-yellow-light); }
+    .accent-orange { --accent: var(--mila-orange); --accent-light: var(--mila-orange-light); }
+    .accent-red { --accent: var(--mila-red); --accent-light: var(--mila-red-light); }
+
+    /* Math blocks */
+    .math-block {
+      background: var(--bg-teal);
+      padding: 10px 14px;
+      border-radius: 6px;
+      margin: 8px 0;
+      border-left: 3px solid var(--mila-purple);
+      overflow-x: auto;
+    }
+    .math-block .katex { font-size: 1.15em; }
+    .math-label {
+      font-size: 0.72em;
+      color: var(--mila-purple);
+      font-weight: 600;
+      margin-bottom: 6px;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+    /* Inline math in cards */
+    .card .katex { font-size: 1.05em; }
+
+    /* Highlight boxes */
+    .highlight-box {
+      background: linear-gradient(135deg, var(--mila-yellow-light) 0%, var(--white) 100%);
+      border-left: 3px solid var(--mila-yellow);
+      padding: 10px 12px;
+      border-radius: 0 8px 8px 0;
+      margin: 10px 0;
+      font-size: 0.9em;
+    }
+    .highlight-box.purple {
+      background: linear-gradient(135deg, var(--mila-purple-light) 0%, var(--white) 100%);
+      border-left-color: var(--mila-purple);
+    }
+    .highlight-box.green {
+      background: linear-gradient(135deg, var(--mila-green-light) 0%, var(--white) 100%);
+      border-left-color: var(--mila-green);
+    }
+    .highlight-box.cyan {
+      background: linear-gradient(135deg, var(--mila-cyan-light) 0%, var(--white) 100%);
+      border-left-color: var(--mila-cyan);
+    }
+    .highlight-box.orange {
+      background: linear-gradient(135deg, var(--mila-orange-light) 0%, var(--white) 100%);
+      border-left-color: var(--mila-orange);
+    }
+    .highlight-box.red {
+      background: linear-gradient(135deg, var(--mila-red-light) 0%, var(--white) 100%);
+      border-left-color: var(--mila-red);
+    }
+
+    /* SVG diagrams */
+    .diagram-container {
+      margin: 12px 0;
+      background: linear-gradient(135deg, var(--bg-teal) 0%, var(--bg-cream) 100%);
+      border-radius: 10px;
+      padding: 12px;
+      border: 1px solid var(--bg-gray);
+    }
+    .diagram-container svg {
+      width: 100%;
+      height: auto;
+      display: block;
+    }
+    .diagram-title {
+      font-size: 0.75em;
+      font-weight: 700;
+      color: var(--mila-purple);
+      margin-bottom: 8px;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+    .diagram-caption {
+      font-size: 0.8em;
+      color: var(--mila-silver);
+      margin-top: 8px;
+      line-height: 1.3;
+    }
+
+    /* Metrics */
+    .metrics-row {
+      display: flex;
+      gap: 10px;
+      margin: 10px 0;
+      flex-wrap: wrap;
+    }
+    .metric {
+      flex: 1;
+      min-width: 100px;
+      text-align: center;
+      padding: 10px 8px;
+      background: linear-gradient(135deg, var(--bg-teal) 0%, var(--white) 100%);
+      border-radius: 8px;
+      border: 1px solid var(--bg-gray);
+    }
+    .metric.highlight {
+      background: linear-gradient(135deg, var(--mila-green-light) 0%, var(--white) 100%);
+      border-color: var(--mila-green);
+    }
+    .metric.orange {
+      background: linear-gradient(135deg, var(--mila-orange-light) 0%, var(--white) 100%);
+      border-color: var(--mila-orange);
+    }
+    .metric-value {
+      font-size: 1.4em;
+      font-weight: 700;
+      color: var(--mila-purple);
+    }
+    .metric.highlight .metric-value { color: var(--mila-green); }
+    .metric.orange .metric-value { color: var(--mila-orange); }
+    .metric-label {
+      font-size: 0.7em;
+      color: var(--mila-silver);
+      margin-top: 2px;
+      font-weight: 500;
+    }
+
+    /* Two column layout */
+    .two-col {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 16px;
+    }
+
+    /* Compound tags */
+    .compound-tags {
+      display: flex;
+      gap: 6px;
+      flex-wrap: wrap;
+      margin: 8px 0;
+    }
+    .compound-tag {
+      font-size: 0.75em;
+      padding: 3px 8px;
+      border-radius: 4px;
+      font-weight: 600;
+    }
+    .compound-tag.solid {
+      background: var(--mila-orange-light);
+      color: var(--mila-orange);
+    }
+    .compound-tag.gas {
+      background: var(--mila-cyan-light);
+      color: var(--mila-cyan);
+    }
+    .compound-tag.product {
+      background: var(--mila-green-light);
+      color: var(--mila-green);
+    }
+
+    /* Footer */
+    footer {
+      margin-top: 8px;
+      padding: 14px 20px;
+      background: var(--white);
+      border-radius: 14px;
+      border: 1px solid rgba(160, 170, 183, 0.55);
+      box-shadow: 0 1px 8px rgba(54, 58, 68, 0.05);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 12px;
+      font-size: 0.8em;
+    }
+    .footer-brand { display: flex; align-items: center; gap: 16px; }
+    .footer-brand .logo-text { font-weight: 700; font-size: 1.1em; color: var(--mila-purple); }
+    .footer-brand .tagline { font-size: 0.75em; color: var(--mila-silver); }
+    .footer-ref {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+      padding-left: 16px;
+      border-left: 2px solid var(--mila-orange-light);
+      max-width: 520px;
+    }
+    .footer-ref-label { font-size: 0.7em; letter-spacing: 0.08em; text-transform: uppercase; color: var(--mila-silver); font-weight: 700; }
+    .footer-ref-text { font-size: 0.85em; color: var(--mila-dark); font-weight: 500; }
+    .tech-stack { display: flex; gap: 10px; flex-wrap: wrap; }
+    .tech-item {
+      font-size: 0.75em;
+      color: var(--mila-dark);
+      padding: 3px 10px;
+      background: var(--bg-teal);
+      border-radius: 12px;
+    }
+
+    /* Print styles */
+    @media print {
+      * { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
+      html, body { margin: 0; padding: 0; background: var(--bg-cream) !important; }
+      .poster { max-width: none; padding: 20px; margin: 0; }
+    }
+    @page { size: A0 landscape; margin: 12mm; }
+</style>
+</head>
+<body>
+<div class="poster">
+
+<!-- HEADER -->
+<header>
+  <div class="header-content">
+    <div class="brand-block">
+      <div class="brand-wordmark">Mila</div>
+      <div class="brand-sub">Quebec AI Institute</div>
+      <div class="brand-author">Pierre-Luc Bacon, PLuRL Group</div>
+    </div>
+    <div class="header-text">
+      <h1>Deep RL for Flash Clay Calciner Control</h1>
+      <p class="subtitle">Neural Surrogate Dynamics + Policy Gradient Methods for Energy-Optimal Metakaolin Production</p>
+      <div class="key-finding">
+        <strong>60× speedup</strong> via neural surrogate | <strong>67% energy savings</strong> vs constant-temperature baseline | 140D state space controlled by PPO/TD3
+      </div>
+    </div>
+  </div>
+</header>
+
+<div class="content-grid">
+
+<!-- ROW 1: Problem Motivation + Physical System -->
+<div class="card span-2 accent-red">
+  <div class="section-kicker">1 - Motivation</div>
+  <h2>Control for Industrial Decarbonization</h2>
+  
+  <p style="margin-bottom:10px;"><strong>Metakaolin</strong> is a key ingredient in low-carbon cement. Flash calciners convert kaolinite clay into metakaolin via rapid thermal processing at ~1000°C. Energy-optimal control can significantly reduce CO₂ emissions.</p>
+  
+  <div style="display:grid; grid-template-columns: 1fr 1fr; gap:10px; margin:10px 0;">
+    <div style="background:var(--bg-cream); border-radius:6px; padding:10px; border-left:4px solid var(--mila-red);">
+      <div style="font-weight:700; color:var(--mila-red); font-size:0.9em; margin-bottom:6px;">CHALLENGES</div>
+      <ul style="font-size:0.8em; margin:0; padding-left:16px;">
+        <li><strong>Fast dynamics:</strong> ~8 seconds residence time</li>
+        <li><strong>High-dimensional:</strong> 140 coupled state variables</li>
+        <li><strong>Nonlinear:</strong> 3rd-order Arrhenius kinetics</li>
+        <li><strong>Constraints:</strong> Conversion targets, temperature limits</li>
+        <li><strong>Spatially distributed:</strong> PDE over 10m riser</li>
+      </ul>
+    </div>
+    <div style="background:var(--bg-teal); border-radius:6px; padding:10px; border-left:4px solid var(--mila-green);">
+      <div style="font-weight:700; color:var(--mila-green); font-size:0.9em; margin-bottom:6px;">DEEP RL SUITABILITY</div>
+      <ul style="font-size:0.8em; margin:0; padding-left:16px;">
+        <li><strong>Model available:</strong> First-principles PDE simulator</li>
+        <li><strong>Clear objective:</strong> Min energy, achieve conversion</li>
+        <li><strong>Neural surrogate:</strong> 60× faster than physics</li>
+        <li><strong>Continuous control:</strong> Temperature setpoints</li>
+        <li><strong>Constrained MDP:</strong> Soft penalty formulation</li>
+      </ul>
+    </div>
+  </div>
+  
+  <div class="highlight-box orange" style="margin:8px 0 0 0; padding:10px;">
+    <strong>Goal:</strong> Control inlet gas temperature T<sub>g,in</sub> ∈ [900K, 1350K] to achieve ≥95% conversion while minimizing energy. Episodes run for 8 seconds of simulated time.
+  </div>
+</div>
+
+<div class="card span-2 accent-orange">
+  <div class="section-kicker">2 - Physical System</div>
+  <h2>The Flash Calciner</h2>
+  
+  <p>A vertical 10m riser where hot gas (~1200K) flows upward carrying fine kaolinite particles. The clay undergoes dehydroxylation, releasing water vapor and forming metakaolin.</p>
+  
+  <div class="diagram-container" style="margin:10px 0; padding:12px;">
+    <div class="diagram-title">Co-current Riser Schematic</div>
+    <svg viewBox="0 0 760 210" xmlns="http://www.w3.org/2000/svg">
+      <defs>
+        <linearGradient id="riserGrad" x1="0%" y1="100%" x2="0%" y2="0%">
+          <stop offset="0%" style="stop-color:#A9DAE9"/>
+          <stop offset="50%" style="stop-color:#F4DA92"/>
+          <stop offset="100%" style="stop-color:#F3B692"/>
+        </linearGradient>
+      </defs>
+      
+      <!-- Temperature labels -->
+      <text x="180" y="190" font-size="12" fill="#59B9D2" font-weight="700">~600K inlet</text>
+      <text x="180" y="50" font-size="12" fill="#F05629" font-weight="700">~1100K outlet</text>
+      
+      <!-- Riser cylinder (vertical) -->
+      <rect x="220" y="30" width="80" height="160" rx="8" fill="url(#riserGrad)" stroke="#363A44" stroke-width="2"/>
+      
+      <!-- Gas + solid flow arrows (upward) -->
+      <line x1="260" y1="175" x2="260" y2="55" stroke="#F05629" stroke-width="3"/>
+      <polygon points="260,45 252,60 268,60" fill="#F05629"/>
+      <text x="260" y="120" text-anchor="middle" font-size="9" fill="white" font-weight="600">↑ Co-current</text>
+      
+      <!-- Particles (dots) -->
+      <g fill="#c44520" fill-opacity="0.7">
+        <circle cx="240" cy="160" r="3"/>
+        <circle cx="270" cy="155" r="2.5"/>
+        <circle cx="250" cy="145" r="2"/>
+        <circle cx="280" cy="140" r="3"/>
+        <circle cx="245" cy="125" r="2.5"/>
+        <circle cx="275" cy="115" r="2"/>
+        <circle cx="255" cy="100" r="2.5"/>
+        <circle cx="265" cy="85" r="2"/>
+        <circle cx="250" cy="70" r="2"/>
+        <circle cx="275" cy="60" r="1.5"/>
+      </g>
+      
+      <!-- Input labels -->
+      <g transform="translate(90, 140)">
+        <rect x="0" y="0" width="110" height="55" rx="6" fill="#ECF6F6" stroke="#59B9D2" stroke-width="1.5"/>
+        <text x="55" y="15" text-anchor="middle" font-size="9" fill="#363A44" font-weight="700">Inputs</text>
+        <text x="55" y="30" text-anchor="middle" font-size="8" fill="#666">Kaolinite clay</text>
+        <text x="55" y="43" text-anchor="middle" font-size="8" fill="#666">Hot gas (T<tspan dy="2" font-size="6">g,in</tspan><tspan dy="-2">)</tspan></text>
+      </g>
+      
+      <!-- Output labels -->
+      <g transform="translate(90, 20)">
+        <rect x="0" y="0" width="110" height="55" rx="6" fill="#B9DBC1" stroke="#3FAE82" stroke-width="1.5"/>
+        <text x="55" y="15" text-anchor="middle" font-size="9" fill="#3FAE82" font-weight="700">Outputs</text>
+        <text x="55" y="30" text-anchor="middle" font-size="8" fill="#363A44">Metakaolin</text>
+        <text x="55" y="43" text-anchor="middle" font-size="8" fill="#363A44">H₂O vapor</text>
+      </g>
+      
+      <!-- Right side: State space -->
+      <g transform="translate(340, 20)">
+        <text x="0" y="15" font-size="11" fill="#363A44" font-weight="700">STATE SPACE (140D)</text>
+        <line x1="0" y1="22" x2="380" y2="22" stroke="#DEDEDE" stroke-width="1"/>
+        
+        <!-- Species -->
+        <rect x="0" y="30" width="180" height="70" rx="4" fill="#F3B692" fill-opacity="0.3" stroke="#F05629"/>
+        <text x="90" y="48" text-anchor="middle" font-size="9" fill="#F05629" font-weight="600">5 Species × 20 cells = 100D</text>
+        <text x="90" y="65" text-anchor="middle" font-size="8" fill="#363A44">C<tspan dy="2" font-size="6">AB₂</tspan> (kaolinite)</text>
+        <text x="90" y="80" text-anchor="middle" font-size="8" fill="#363A44">C<tspan dy="2" font-size="6">A</tspan> (metakaolin), C<tspan dy="2" font-size="6">B</tspan> (H₂O)</text>
+        <text x="90" y="95" text-anchor="middle" font-size="8" fill="#363A44">C<tspan dy="2" font-size="6">air</tspan>, C<tspan dy="2" font-size="6">O</tspan> (inert)</text>
+        
+        <!-- Temperatures -->
+        <rect x="200" y="30" width="180" height="70" rx="4" fill="#A9DAE9" fill-opacity="0.3" stroke="#59B9D2"/>
+        <text x="290" y="48" text-anchor="middle" font-size="9" fill="#59B9D2" font-weight="600">2 Temps × 20 cells = 40D</text>
+        <text x="290" y="70" text-anchor="middle" font-size="8" fill="#363A44">T<tspan dy="2" font-size="6">s</tspan> (solid temperature)</text>
+        <text x="290" y="88" text-anchor="middle" font-size="8" fill="#363A44">T<tspan dy="2" font-size="6">g</tspan> (gas temperature)</text>
+        
+        <!-- Control -->
+        <rect x="0" y="110" width="380" height="40" rx="4" fill="#B9DBC1" fill-opacity="0.3" stroke="#3FAE82"/>
+        <text x="190" y="128" text-anchor="middle" font-size="9" fill="#3FAE82" font-weight="600">CONTROL: T<tspan dy="2" font-size="7">g,in</tspan><tspan dy="-2"> ∈ [900K, 1350K]</tspan></text>
+        <text x="190" y="145" text-anchor="middle" font-size="8" fill="#363A44">Single continuous action: inlet gas temperature setpoint</text>
+      </g>
+      
+      <!-- Reaction zone indicator -->
+      <text x="260" y="205" text-anchor="middle" font-size="9" fill="#A0AAB7" font-weight="600">~8 sec residence time</text>
+    </svg>
+    <div class="diagram-caption"><strong>Co-current design:</strong> Hot gas and solid particles flow upward together. The reaction Al₂Si₂O₅(OH)₄ → Al₂Si₂O₇ + 2H₂O is endothermic, so higher inlet temperatures drive faster conversion but consume more energy.</div>
+  </div>
+  
+  <div class="metrics-row">
+    <div class="metric orange">
+      <div class="metric-value">10 m</div>
+      <div class="metric-label">Riser Height</div>
+    </div>
+    <div class="metric orange">
+      <div class="metric-value">140D</div>
+      <div class="metric-label">State Space</div>
+    </div>
+    <div class="metric orange">
+      <div class="metric-value">~8 sec</div>
+      <div class="metric-label">Residence Time</div>
+    </div>
+    <div class="metric orange">
+      <div class="metric-value">95%</div>
+      <div class="metric-label">Target Conversion</div>
+    </div>
+  </div>
+</div>
+
+<!-- ROW 2: Physics Model + Neural Surrogate -->
+<div class="card span-2 accent-cyan">
+  <div class="section-kicker">3 - Physics Model</div>
+  <h2>First-Principles PDE Simulation</h2>
+  
+  <p style="margin-bottom:8px;">The physics model solves coupled mass and energy balance PDEs using <strong>finite volume discretization</strong> (20 spatial cells).</p>
+  
+  <div class="math-block" style="margin:8px 0; padding:10px;">
+    <div class="math-label">Mass Balance (per species)</div>
+    $$\frac{\partial C_i}{\partial t} = -\frac{\partial (v C_i)}{\partial z} + R_i$$
+  </div>
+  
+  <div class="math-block" style="margin:8px 0; padding:10px;">
+    <div class="math-label">Energy Balance</div>
+    $$\rho c_p \frac{\partial T}{\partial t} = -\rho c_p v \frac{\partial T}{\partial z} + h(T_{other} - T) + \Delta H_r \cdot r$$
+  </div>
+  
+  <div class="compound-tags">
+    <span class="compound-tag solid">Kaolinite Al₂Si₂O₅(OH)₄</span>
+    <span class="compound-tag product">Metakaolin Al₂Si₂O₇</span>
+    <span class="compound-tag gas">Water H₂O</span>
+  </div>
+  
+  <div class="math-block" style="margin:8px 0; padding:10px;">
+    <div class="math-label">Dehydroxylation Kinetics (3rd order Arrhenius)</div>
+    $$r = k_0 \exp\left(-\frac{E_a}{RT}\right) C_{AB_2}^3$$
+  </div>
+  
+  <div class="highlight-box cyan" style="margin:8px 0 0 0; padding:8px;">
+    <strong>Problem:</strong> Full physics simulation takes ~25ms per step. For RL training (millions of steps), this is prohibitive. We need a faster surrogate.
+  </div>
+</div>
+
+<div class="card span-2 accent-purple">
+  <div class="section-kicker">4 - Neural Surrogate</div>
+  <h2>Spatially-Aware 1D CNN</h2>
+  
+  <p style="margin-bottom:8px;">We train a neural network to predict state transitions: $x_{t+1} = x_t + f_\theta(x_t, u_t)$ (residual learning).</p>
+  
+  <div style="display:grid; grid-template-columns: 1fr 1fr; gap:10px; margin:10px 0;">
+    <div style="background:var(--mila-purple-light); border-radius:8px; padding:12px; border:2px solid var(--mila-purple);">
+      <div style="font-weight:700; color:var(--mila-purple); font-size:0.95em; margin-bottom:8px;">ARCHITECTURE</div>
+      <ul style="font-size:0.8em; margin:0; padding-left:16px;">
+        <li>1D convolutions (kernel=3, padding=1)</li>
+        <li>Hidden dimension: 128</li>
+        <li>Separate branches for concentrations, temps</li>
+        <li>GELU activations + 10% Dropout</li>
+        <li><strong>69K parameters</strong></li>
+      </ul>
+    </div>
+    <div style="background:var(--mila-green-light); border-radius:8px; padding:12px; border:2px solid var(--mila-green);">
+      <div style="font-weight:700; color:var(--mila-green); font-size:0.95em; margin-bottom:8px;">TRAINING</div>
+      <ul style="font-size:0.8em; margin:0; padding-left:16px;">
+        <li>10,000 transitions from physics simulator</li>
+        <li>Diverse initial conditions (cold/warm/steady)</li>
+        <li>MSE loss on state deltas</li>
+        <li>100 epochs, AdamW optimizer</li>
+        <li><strong>~19% MRE</strong> on challenging rollouts</li>
+      </ul>
+    </div>
+  </div>
+  
+  <div class="metrics-row" style="margin-top:8px;">
+    <div class="metric highlight">
+      <div class="metric-value" style="color:var(--mila-green);">60×</div>
+      <div class="metric-label">Speedup</div>
+    </div>
+    <div class="metric">
+      <div class="metric-value">0.4ms</div>
+      <div class="metric-label">Per Step</div>
+    </div>
+    <div class="metric">
+      <div class="metric-value">19%</div>
+      <div class="metric-label">MRE</div>
+    </div>
+  </div>
+  
+  <div class="highlight-box purple" style="margin:8px 0 0 0; padding:8px;">
+    <strong>Key insight:</strong> 1D convolutions respect spatial locality of the PDE. Neighboring cells interact through convolution kernels, matching finite-volume structure.
+  </div>
+</div>
+
+<!-- ROW 3: RL Formulation + Algorithms -->
+<div class="card span-2 accent-orange">
+  <div class="section-kicker">5 - RL Formulation</div>
+  <h2>Constrained MDP</h2>
+  
+  <p style="margin-bottom:8px;">We formulate the control problem as a constrained MDP with soft penalty terms in the reward.</p>
+  
+  <div class="math-block" style="margin:8px 0; padding:10px;">
+    <div class="math-label">Reward Function</div>
+    $$r(s, a) = -\lambda_E \cdot E(a) - \lambda_\alpha \cdot \max(0, \alpha_{target} - \alpha(s)) - \lambda_T \cdot \mathbb{1}[T \notin bounds]$$
+  </div>
+  
+  <div style="display:grid; grid-template-columns: 1fr 1fr 1fr; gap:8px; margin:10px 0;">
+    <div style="background:var(--bg-cream); padding:8px; border-radius:4px; font-size:0.85em;">
+      <strong style="color:var(--mila-orange);">Energy Cost</strong><br>
+      Penalize high inlet temperatures (more fuel/energy)
+    </div>
+    <div style="background:var(--bg-cream); padding:8px; border-radius:4px; font-size:0.85em;">
+      <strong style="color:var(--mila-green);">Conversion Constraint</strong><br>
+      Penalize if α < 95% target
+    </div>
+    <div style="background:var(--bg-cream); padding:8px; border-radius:4px; font-size:0.85em;">
+      <strong style="color:var(--mila-red);">Safety Bounds</strong><br>
+      Penalize temperature violations
+    </div>
+  </div>
+  
+  <div class="highlight-box orange" style="margin:8px 0 0 0; padding:8px;">
+    <strong>Two-part curriculum:</strong> Part 1 uses a simplified 3D model (T<sub>s</sub>, α, t) to develop RL intuition. Part 2 scales to the full 140D surrogate.
+  </div>
+</div>
+
+<div class="card span-2 accent-green">
+  <div class="section-kicker">6 - Algorithms</div>
+  <h2>REINFORCE, PPO, TD3</h2>
+  
+  <p style="margin-bottom:8px;">Three policy gradient / actor-critic methods to explore the design space.</p>
+  
+  <div style="display:grid; grid-template-columns: 1fr 1fr 1fr; gap:10px; margin:10px 0;">
+    <div style="background:var(--mila-cyan-light); border-radius:8px; padding:10px; border:2px solid var(--mila-cyan);">
+      <div style="font-weight:700; color:var(--mila-cyan); font-size:0.9em; margin-bottom:6px;">REINFORCE</div>
+      <ul style="font-size:0.75em; margin:0; padding-left:14px;">
+        <li>Vanilla policy gradient</li>
+        <li>Monte Carlo returns</li>
+        <li>High variance baseline</li>
+        <li>Simple to implement</li>
+      </ul>
+    </div>
+    <div style="background:var(--mila-purple-light); border-radius:8px; padding:10px; border:2px solid var(--mila-purple);">
+      <div style="font-weight:700; color:var(--mila-purple); font-size:0.9em; margin-bottom:6px;">PPO</div>
+      <ul style="font-size:0.75em; margin:0; padding-left:14px;">
+        <li>Clipped surrogate objective</li>
+        <li>Trust region approximation</li>
+        <li>Stable on-policy learning</li>
+        <li>Good sample efficiency</li>
+      </ul>
+    </div>
+    <div style="background:var(--mila-green-light); border-radius:8px; padding:10px; border:2px solid var(--mila-green);">
+      <div style="font-weight:700; color:var(--mila-green); font-size:0.9em; margin-bottom:6px;">TD3</div>
+      <ul style="font-size:0.75em; margin:0; padding-left:14px;">
+        <li>Twin critics (reduce overest.)</li>
+        <li>Delayed policy updates</li>
+        <li>Target policy smoothing</li>
+        <li>Off-policy, replay buffer</li>
+      </ul>
+    </div>
+  </div>
+  
+  <div class="math-block" style="margin:8px 0; padding:8px;">
+    <div class="math-label">PPO Clipped Objective</div>
+    $$L^{CLIP}(\theta) = \mathbb{E}_t \left[ \min\left( r_t(\theta) \hat{A}_t, \text{clip}(r_t(\theta), 1-\epsilon, 1+\epsilon) \hat{A}_t \right) \right]$$
+  </div>
+</div>
+
+<!-- ROW 4: Results -->
+<div class="card span-4 accent-cyan">
+  <div class="section-kicker">7 - Results</div>
+  <h2>Performance Comparison</h2>
+  
+  <div style="display:grid; grid-template-columns: 1fr 1fr 1fr; gap:16px;">
+    <!-- Left: Metrics table -->
+    <div>
+      <p style="font-weight:600; margin-bottom:8px;">Energy & Conversion Metrics</p>
+      <table style="width:100%; font-size:0.85em; border-collapse:collapse;">
+        <tr style="background:var(--bg-cream);">
+          <th style="padding:6px; text-align:left; border-bottom:2px solid var(--mila-cyan);">Method</th>
+          <th style="padding:6px; text-align:right; border-bottom:2px solid var(--mila-cyan);">Energy</th>
+          <th style="padding:6px; text-align:right; border-bottom:2px solid var(--mila-cyan);">α</th>
+        </tr>
+        <tr>
+          <td style="padding:6px;">Constant T (baseline)</td>
+          <td style="padding:6px; text-align:right;">100%</td>
+          <td style="padding:6px; text-align:right; color:var(--mila-green);">96.8%</td>
+        </tr>
+        <tr style="background:var(--bg-teal);">
+          <td style="padding:6px; font-weight:600;">MPC (MPPI)</td>
+          <td style="padding:6px; text-align:right; font-weight:600; color:var(--mila-green);">33%</td>
+          <td style="padding:6px; text-align:right; color:var(--mila-green);">95.1%</td>
+        </tr>
+        <tr>
+          <td style="padding:6px;">PPO</td>
+          <td style="padding:6px; text-align:right;">45%</td>
+          <td style="padding:6px; text-align:right; color:var(--mila-green);">95.3%</td>
+        </tr>
+        <tr style="background:var(--bg-teal);">
+          <td style="padding:6px;">TD3</td>
+          <td style="padding:6px; text-align:right;">42%</td>
+          <td style="padding:6px; text-align:right; color:var(--mila-green);">95.5%</td>
+        </tr>
+      </table>
+    </div>
+    
+    <!-- Middle: Key findings -->
+    <div>
+      <p style="font-weight:600; margin-bottom:8px;">Key Findings</p>
+      <ul style="font-size:0.85em;">
+        <li><strong>67% energy savings</strong> with MPPI vs baseline</li>
+        <li>RL methods achieve ~55% savings with no planning</li>
+        <li>All methods satisfy 95% conversion constraint</li>
+        <li>Surrogate enables RL training in minutes (vs days)</li>
+        <li>TD3 slightly outperforms PPO (off-policy advantage)</li>
+      </ul>
+      
+      <div class="highlight-box green" style="margin:10px 0 0 0; padding:8px;">
+        <strong>Insight:</strong> Lower inlet T early (when clay is cold), ramp up as reaction progresses. This "lazy heating" strategy emerges from optimization.
+      </div>
+    </div>
+    
+    <!-- Right: Speedup comparison -->
+    <div>
+      <p style="font-weight:600; margin-bottom:8px;">Computational Comparison</p>
+      <div class="metrics-row" style="flex-direction:column; gap:8px;">
+        <div class="metric" style="display:flex; justify-content:space-between; align-items:center; padding:8px 12px;">
+          <span style="font-size:0.85em;">Physics Simulator</span>
+          <span style="font-weight:700; color:var(--mila-red);">25ms/step</span>
+        </div>
+        <div class="metric highlight" style="display:flex; justify-content:space-between; align-items:center; padding:8px 12px;">
+          <span style="font-size:0.85em;">Neural Surrogate</span>
+          <span style="font-weight:700; color:var(--mila-green);">0.4ms/step</span>
+        </div>
+        <div class="metric" style="display:flex; justify-content:space-between; align-items:center; padding:8px 12px;">
+          <span style="font-size:0.85em;">RL Training (1M steps)</span>
+          <span style="font-weight:700; color:var(--mila-purple);">~7 min</span>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+</div><!-- end content-grid -->
+
+<footer>
+  <div class="footer-brand">
+    <div>
+      <div class="logo-text">Mila - Quebec AI Institute</div>
+      <div class="tagline">Neural surrogate + Deep RL for industrial control | 60× speedup | 67% energy savings</div>
+    </div>
+    <div class="footer-ref">
+      <span class="footer-ref-label">Reference</span>
+      <span class="footer-ref-text">Cantisani et al. (2018) - Dynamic modeling and simulation of a flash clay calciner.</span>
+    </div>
+  </div>
+  <div class="tech-stack">
+    <span class="tech-item">Python 3.11</span>
+    <span class="tech-item">PyTorch</span>
+    <span class="tech-item">NumPy</span>
+    <span class="tech-item">SciPy</span>
+  </div>
+</footer>
+
+</div><!-- end poster -->
+
+<script>
+  document.addEventListener("DOMContentLoaded", function() {
+    renderMathInElement(document.body, {
+      delimiters: [
+        {left: "$$", right: "$$", display: true},
+        {left: "$", right: "$", display: false}
+      ],
+      throwOnError: false
+    });
+  });
+</script>
+</body>
+</html>
