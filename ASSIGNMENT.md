@@ -27,7 +27,7 @@ Outlet conversion $\alpha \in [0,1]$ follows first-order lag dynamics:
 
 $$\alpha_{k+1} = e^{-\Delta t/\tau} \alpha_k + (1 - e^{-\Delta t/\tau}) \, \alpha_{ss}(u_k)$$
 
-where $\tau = 2$ s, $\Delta t = 0.5$ s, and steady-state conversion $\alpha_{ss}(T) = 0.999/(1 + \exp(-0.025(T - 1000)))$ captures Arrhenius kinetics. At 900K you get ~50% conversion; at 1200K you approach 100%.
+where $\tau = 2$ s, $\Delta t = 0.5$ s, and steady-state conversion $\alpha_{ss}(T) = 0.999/(1 + \exp(-0.025(T - 1000)))$ captures Arrhenius kinetics. At 900K you get only ~8% conversion; at 1000K you get 50%; at 1100K you reach ~92%; and above 1200K you approach 99%+.
 
 **Environment**: State is $[\alpha, \alpha_{min}, t/T] \in \mathbb{R}^3$. Action is $T_{g,in} \in [900, 1300]$ K. Reward is $-\text{energy} - 10 \cdot \max(0, \alpha_{min} - \alpha)^2$. Import with `from calciner import CalcinerEnv`.
 
@@ -41,7 +41,7 @@ where $\tau = 2$ s, $\Delta t = 0.5$ s, and steady-state conversion $\alpha_{ss}
 
 ### Evaluation
 
-Compare against `ConstantTemperatureController(T_g_in=1261)` which achieves 99.8% conversion but uses maximum energy. Can your policies match 95% conversion with 50% less energy?
+Compare against `ConstantTemperatureController(T_g_in=1261)` which achieves 99.8% conversion but uses maximum energy. Can your policies maintain 95% conversion while reducing energy? (Hint: 95% conversion requires ~1120K steady-state, which is only ~15% energy savings. The real opportunity is in the time-varying targets—when $\alpha_{min}$ drops to 90%, you can use much lower temperatures.)
 
 Plot learning curves. Does the policy learn to lower temperature when $\alpha$ exceeds $\alpha_{min}$, or does it just blast heat?
 
@@ -93,7 +93,7 @@ REINFORCE (15), PPO (20), TD3 (15), Part 2 algorithm (25), Part 2 evaluation (15
 
 - Start with a simple policy architecture. Even a 2-layer MLP can work for Part 1.
 - For Part 2, the state is already normalized by the environment. Don't re-normalize.
-- The baseline achieves 99.8% conversion but uses maximum energy. Can you match 95% conversion with 50% less energy?
+- The baseline achieves 99.8% conversion at constant 1261K. A smart policy exploits time-varying targets: when $\alpha_{min}=0.90$, you can drop to lower temperatures and save energy.
 - Visualizations matter: plot temperature vs time, not just scalar rewards.
 - The surrogate has 19% error on hard rollouts but <1% on steady-state. Your policy will naturally stay near easier-to-predict regions.
 - Test on the true physics simulator! The surrogate is just for training speed.

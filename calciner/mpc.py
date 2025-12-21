@@ -38,9 +38,10 @@ class CalcinerDynamics:
         Compute steady-state conversion at given gas inlet temperature.
         
         Uses a sigmoidal relationship calibrated to match the physics model:
-        - Low T (~900K): ~50% conversion
-        - Mid T (~1000K): ~73% conversion  
-        - High T (~1261K): ~99% conversion
+        - T = 900K: ~8% conversion
+        - T = 1000K: ~50% conversion (inflection point)
+        - T = 1100K: ~92% conversion
+        - T = 1261K: ~99.8% conversion
         """
         alpha_max = 0.999
         T_mid = 1000.0
