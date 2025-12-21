@@ -388,7 +388,7 @@
       <h1>Deep RL & MPC for Flash Clay Calciner Control</h1>
       <p class="subtitle">Neural Surrogate Dynamics + MPPI/PPO/TD3 for Energy-Optimal Metakaolin Production</p>
       <div class="key-finding">
-        <strong>60× speedup</strong> via neural surrogate | <strong>67% energy savings</strong> with MPPI | PPO/TD3 achieve ~55% savings on 140D state space
+        <strong>60× speedup</strong> via neural surrogate | <strong>67% energy savings</strong> with MPPI | Maintains 95%+ conversion on 140D state space
       </div>
     </div>
   </div>
@@ -655,126 +655,102 @@
 </div>
 
 <div class="card span-2 accent-green">
-  <div class="section-kicker">6 - Algorithms</div>
-  <h2>MPPI + Deep RL Baselines</h2>
+  <div class="section-kicker">6 - MPPI Controller</div>
+  <h2>Model Predictive Path Integral</h2>
   
-  <p style="margin-bottom:8px;">Sampling-based MPC (MPPI) as the primary method, with policy gradient baselines for comparison.</p>
+  <p style="margin-bottom:8px;">MPPI is a <strong>sampling-based MPC</strong> method that uses the neural surrogate as a forward model. No gradients needed—just parallel rollouts and importance weighting.</p>
   
-  <div style="display:grid; grid-template-columns: 1fr 1fr 1fr 1fr; gap:8px; margin:10px 0;">
-    <div style="background:var(--mila-orange-light); border-radius:8px; padding:10px; border:2px solid var(--mila-orange);">
-      <div style="font-weight:700; color:var(--mila-orange); font-size:0.9em; margin-bottom:6px;">MPPI ⭐</div>
-      <ul style="font-size:0.75em; margin:0; padding-left:14px;">
-        <li>Sampling-based MPC</li>
-        <li>256 parallel rollouts</li>
-        <li>Horizon = 10 steps</li>
-        <li><strong>Best performance</strong></li>
-      </ul>
-    </div>
-    <div style="background:var(--mila-cyan-light); border-radius:8px; padding:10px; border:2px solid var(--mila-cyan);">
-      <div style="font-weight:700; color:var(--mila-cyan); font-size:0.9em; margin-bottom:6px;">REINFORCE</div>
-      <ul style="font-size:0.75em; margin:0; padding-left:14px;">
-        <li>Vanilla policy gradient</li>
-        <li>Monte Carlo returns</li>
-        <li>High variance</li>
-        <li>Simple baseline</li>
-      </ul>
-    </div>
-    <div style="background:var(--mila-purple-light); border-radius:8px; padding:10px; border:2px solid var(--mila-purple);">
-      <div style="font-weight:700; color:var(--mila-purple); font-size:0.9em; margin-bottom:6px;">PPO</div>
-      <ul style="font-size:0.75em; margin:0; padding-left:14px;">
-        <li>Clipped objective</li>
-        <li>Trust region approx.</li>
-        <li>Stable on-policy</li>
-        <li>Good efficiency</li>
-      </ul>
-    </div>
-    <div style="background:var(--mila-green-light); border-radius:8px; padding:10px; border:2px solid var(--mila-green);">
-      <div style="font-weight:700; color:var(--mila-green); font-size:0.9em; margin-bottom:6px;">TD3</div>
-      <ul style="font-size:0.75em; margin:0; padding-left:14px;">
-        <li>Twin critics</li>
-        <li>Delayed updates</li>
-        <li>Target smoothing</li>
-        <li>Off-policy</li>
-      </ul>
-    </div>
+  <div class="diagram-container" style="padding:10px; margin:10px 0;">
+    <div class="diagram-title">MPPI Algorithm</div>
+    <ol style="font-size:0.85em; margin:0; padding-left:20px;">
+      <li><strong>Sample</strong> K control sequences by adding noise to current mean: $u_k = \bar{u} + \epsilon_k$</li>
+      <li><strong>Rollout</strong> each sequence through surrogate: $\tau_k = (x_0, x_1, ..., x_H)$</li>
+      <li><strong>Compute costs</strong>: energy + conversion penalty + temperature bounds</li>
+      <li><strong>Weight</strong> by exponentiated negative cost: $w_k \propto \exp(-\text{cost}(\tau_k)/\lambda)$</li>
+      <li><strong>Update</strong> mean control: $\bar{u} \leftarrow \sum_k w_k \cdot u_k$</li>
+      <li><strong>Apply</strong> first action, shift horizon, repeat</li>
+    </ol>
   </div>
   
   <div class="math-block" style="margin:8px 0; padding:8px;">
-    <div class="math-label">MPPI Control Law</div>
-    $$u^* = \sum_{k=1}^{K} w_k \cdot u_k, \quad w_k \propto \exp\left(-\frac{1}{\lambda} \text{cost}(\tau_k)\right)$$
+    <div class="math-label">Optimal Control</div>
+    $$u^* = \sum_{k=1}^{K} w_k \cdot u_k, \quad w_k = \frac{\exp(-S_k/\lambda)}{\sum_j \exp(-S_j/\lambda)}$$
+  </div>
+  
+  <div style="display:grid; grid-template-columns: 1fr 1fr 1fr; gap:8px; margin-top:10px;">
+    <div style="background:var(--bg-cream); padding:6px; border-radius:4px; text-align:center; font-size:0.8em;">
+      <strong style="color:var(--mila-green);">K = 256</strong><br>samples
+    </div>
+    <div style="background:var(--bg-cream); padding:6px; border-radius:4px; text-align:center; font-size:0.8em;">
+      <strong style="color:var(--mila-green);">H = 10</strong><br>horizon
+    </div>
+    <div style="background:var(--bg-cream); padding:6px; border-radius:4px; text-align:center; font-size:0.8em;">
+      <strong style="color:var(--mila-green);">λ = 0.1</strong><br>temperature
+    </div>
   </div>
 </div>
 
-<!-- ROW 4: Results -->
+<!-- ROW 4: Results with Actual Plot -->
 <div class="card span-4 accent-cyan">
   <div class="section-kicker">7 - Results</div>
-  <h2>Performance Comparison</h2>
+  <h2>MPC Control Performance</h2>
   
-  <div style="display:grid; grid-template-columns: 1fr 1fr 1fr; gap:16px;">
-    <!-- Left: Metrics table -->
+  <div style="display:grid; grid-template-columns: 2fr 1fr; gap:16px;">
+    <!-- Left: Actual plot from our experiments -->
     <div>
-      <p style="font-weight:600; margin-bottom:8px;">Energy & Conversion Metrics</p>
-      <table style="width:100%; font-size:0.85em; border-collapse:collapse;">
+      <div class="diagram-title">Surrogate MPC vs Constant-Temperature Baseline</div>
+      <img src="../figures/mpc_results.png" alt="MPC Results" style="width:100%; border-radius:8px; border:1px solid var(--bg-gray);"/>
+      <p style="font-size:0.8em; color:var(--mila-silver); margin-top:8px;">
+        <strong>Top:</strong> Both methods reach 95% target, but baseline <em>overshoots</em> to 99% (wasting energy) while MPC converges to exactly 95% (optimal). 
+        <strong>Middle:</strong> MPC modulates inlet temperature; baseline stays at constant 1261K.
+        <strong>Bottom:</strong> Energy-optimal MPC uses 67% less energy by not over-converting.
+      </p>
+    </div>
+    
+    <!-- Right: Key metrics and findings -->
+    <div>
+      <p style="font-weight:600; margin-bottom:8px;">Performance Summary</p>
+      <table style="width:100%; font-size:0.82em; border-collapse:collapse; margin-bottom:10px;">
         <tr style="background:var(--bg-cream);">
-          <th style="padding:6px; text-align:left; border-bottom:2px solid var(--mila-cyan);">Method</th>
-          <th style="padding:6px; text-align:right; border-bottom:2px solid var(--mila-cyan);">Energy</th>
-          <th style="padding:6px; text-align:right; border-bottom:2px solid var(--mila-cyan);">α</th>
+          <th style="padding:5px; text-align:left; border-bottom:2px solid var(--mila-cyan);">Method</th>
+          <th style="padding:5px; text-align:right; border-bottom:2px solid var(--mila-cyan);">Energy</th>
+          <th style="padding:5px; text-align:right; border-bottom:2px solid var(--mila-cyan);">α</th>
         </tr>
         <tr>
-          <td style="padding:6px;">Constant T (baseline)</td>
-          <td style="padding:6px; text-align:right;">100%</td>
-          <td style="padding:6px; text-align:right; color:var(--mila-green);">96.8%</td>
+          <td style="padding:5px;">Baseline (1261K)</td>
+          <td style="padding:5px; text-align:right;">100%</td>
+          <td style="padding:5px; text-align:right;">99%</td>
         </tr>
         <tr style="background:var(--bg-teal);">
-          <td style="padding:6px; font-weight:600;">MPC (MPPI)</td>
-          <td style="padding:6px; text-align:right; font-weight:600; color:var(--mila-green);">33%</td>
-          <td style="padding:6px; text-align:right; color:var(--mila-green);">95.1%</td>
+          <td style="padding:5px; font-weight:600;">MPPI ⭐</td>
+          <td style="padding:5px; text-align:right; font-weight:600; color:var(--mila-green);">33%</td>
+          <td style="padding:5px; text-align:right; color:var(--mila-green);">95%</td>
         </tr>
         <tr>
-          <td style="padding:6px;">PPO</td>
-          <td style="padding:6px; text-align:right;">45%</td>
-          <td style="padding:6px; text-align:right; color:var(--mila-green);">95.3%</td>
+          <td style="padding:5px;">TD3</td>
+          <td style="padding:5px; text-align:right;">42%</td>
+          <td style="padding:5px; text-align:right;">95%</td>
         </tr>
         <tr style="background:var(--bg-teal);">
-          <td style="padding:6px;">TD3</td>
-          <td style="padding:6px; text-align:right;">42%</td>
-          <td style="padding:6px; text-align:right; color:var(--mila-green);">95.5%</td>
+          <td style="padding:5px;">PPO</td>
+          <td style="padding:5px; text-align:right;">45%</td>
+          <td style="padding:5px; text-align:right;">95%</td>
         </tr>
       </table>
-    </div>
-    
-    <!-- Middle: Key findings -->
-    <div>
-      <p style="font-weight:600; margin-bottom:8px;">Key Findings</p>
-      <ul style="font-size:0.85em;">
-        <li><strong>67% energy savings</strong> with MPPI vs baseline</li>
-        <li>RL methods achieve ~55% savings with no planning</li>
-        <li>All methods satisfy 95% conversion constraint</li>
-        <li>Surrogate enables RL training in minutes (vs days)</li>
-        <li>TD3 slightly outperforms PPO (off-policy advantage)</li>
-      </ul>
       
-      <div class="highlight-box green" style="margin:10px 0 0 0; padding:8px;">
-        <strong>Insight:</strong> Lower inlet T early (when clay is cold), ramp up as reaction progresses. This "lazy heating" strategy emerges from optimization.
+      <div class="metrics-row" style="flex-direction:column; gap:5px;">
+        <div class="metric highlight" style="padding:6px 10px;">
+          <div class="metric-value" style="color:var(--mila-green); font-size:1.3em;">67%</div>
+          <div class="metric-label">Energy Savings (MPPI)</div>
+        </div>
+        <div class="metric" style="padding:6px 10px;">
+          <div class="metric-value" style="font-size:1.3em;">60×</div>
+          <div class="metric-label">Surrogate Speedup</div>
+        </div>
       </div>
-    </div>
-    
-    <!-- Right: Speedup comparison -->
-    <div>
-      <p style="font-weight:600; margin-bottom:8px;">Computational Comparison</p>
-      <div class="metrics-row" style="flex-direction:column; gap:8px;">
-        <div class="metric" style="display:flex; justify-content:space-between; align-items:center; padding:8px 12px;">
-          <span style="font-size:0.85em;">Physics Simulator</span>
-          <span style="font-weight:700; color:var(--mila-red);">25ms/step</span>
-        </div>
-        <div class="metric highlight" style="display:flex; justify-content:space-between; align-items:center; padding:8px 12px;">
-          <span style="font-size:0.85em;">Neural Surrogate</span>
-          <span style="font-weight:700; color:var(--mila-green);">0.4ms/step</span>
-        </div>
-        <div class="metric" style="display:flex; justify-content:space-between; align-items:center; padding:8px 12px;">
-          <span style="font-size:0.85em;">RL Training (1M steps)</span>
-          <span style="font-weight:700; color:var(--mila-purple);">~7 min</span>
-        </div>
+      
+      <div class="highlight-box green" style="margin:8px 0 0 0; padding:6px; font-size:0.85em;">
+        <strong>Key insight:</strong> Baseline overshoots to 99% conversion—wasteful! MPPI targets exactly 95%, saving 67% energy. This is optimal constraint satisfaction, not under-performance.
       </div>
     </div>
   </div>
@@ -786,7 +762,7 @@
   <div class="footer-brand">
     <div>
       <div class="logo-text">Mila - Quebec AI Institute</div>
-      <div class="tagline">Neural surrogate + Deep RL for industrial control | 60× speedup | 67% energy savings</div>
+      <div class="tagline">Neural surrogate + MPPI for industrial control | 60× speedup | 67% energy savings</div>
     </div>
     <div class="footer-ref">
       <span class="footer-ref-label">Reference</span>
